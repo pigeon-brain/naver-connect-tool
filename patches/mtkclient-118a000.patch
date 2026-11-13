@@ -1,0 +1,186 @@
+diff --git a/mtkclient/Library/DA/xflash/xflash_lib.py b/mtkclient/Library/DA/xflash/xflash_lib.py
+index 01248aa..01eadab 100644
+--- a/mtkclient/Library/DA/xflash/xflash_lib.py
++++ b/mtkclient/Library/DA/xflash/xflash_lib.py
+@@ -7,7 +7,7 @@ import os
+ import sys
+ from binascii import hexlify
+ from struct import pack, unpack
+-from queue import Queue
++from queue import Full, Queue
+ from threading import Thread
+ from Cryptodome.Util.number import long_to_bytes
+ 
+@@ -705,26 +705,22 @@ class DAXFlash(metaclass=LogBase):
+ 
+     def readflash(self, addr, length, filename, parttype=None, display=True) -> (bytes, bool):
+         partinfo = self.daconfig.storage.get_storage(parttype, length)
+-        rq = None
+-        buffer = None
++        if not partinfo:
++            return False if filename else b""
++        storage, parttype, length = partinfo
++        pg = progress(total=length, prefix="Read:", guiprogress=self.mtk.config.guiprogress)
++        writer_errors = []
+         if filename:
+-            if not partinfo:
+-                return False
+             rq = Queue(maxsize=32)
+-            worker = Thread(target=writedata, args=(filename, rq), daemon=True)
++            worker = Thread(target=writedata, args=(filename, rq, writer_errors), daemon=True)
+             worker.start()
+         else:
+-            if not partinfo:
+-                return b""
+             buffer = bytearray()
+-        storage, parttype, length = partinfo
+-        pg = progress(total=length, prefix="Read:", guiprogress=self.mtk.config.guiprogress)
+-        # Get optimal packet sizes
+-        plen = self.get_packet_length()
+-        read_packet_length = plen.read_packet_length if plen else 0x100000  # fallback 1MB
+-        max_usb_packet = self.mtk.port.cdc.get_read_packetsize()
+         bytesread = 0
++        success = False
+         try:
++            plen = self.get_packet_length()
++            read_packet_length = plen.read_packet_length if plen else 0x100000
+             if self.cmd_read_data(addr=addr, size=length, storage=storage, parttype=parttype):
+                 bytestoread = length
+                 while bytestoread > 0:
+@@ -749,7 +745,9 @@ class DAXFlash(metaclass=LogBase):
+                         remaining -= len(data)
+                     if slength > 4:
+                         if filename:
+-                            rq.put(bytes(chunk_buffer))
++                            if not worker.is_alive():
++                                raise OSError("File writer stopped")
++                            rq.put(bytes(chunk_buffer), timeout=30)
+                         else:
+                             buffer.extend(chunk_buffer)
+                         self.ack(rstatus=False)
+@@ -761,49 +759,44 @@ class DAXFlash(metaclass=LogBase):
+                     elif slength == 4:
+                         flag = unpack("<I", chunk_buffer)[0]
+                         if flag != 0:
+-                            self.error("Read completed with error status")
+-                            break
++                            raise IOError(f"Read completed with error status {flag:#x}")
+                     else:
+                         print("Error: Invalid slength")
+                         break
+-            # Final acknowledge
++            if bytesread != length:
++                raise IOError(f"Read returned {bytesread} of {length} bytes")
+             status = self.usbread(12, maxtimeout=5000)
+             magic, _, slength = unpack("<III", status)
+-            if magic == 0xFEEEEEEF:
+-                resdata = self.usbread(slength, w_max_packet_size=slength)
+-                if slength == 4:
+-                    if unpack("<I", resdata)[0] != 0:
+-                        self.error("Read completed with error status")
+-            if filename:
+-                rq.put(None)
+-                worker.join(timeout=30)
+-                if display:
+-                    pg.done()
+-                if worker.is_alive():
+-                    self.warning("Writer thread didn't finish cleanly")
+-                    return False
+-                return True
+-            else:
+-                if display:
+-                    pg.done()
+-                return buffer
++            if magic != 0xFEEEEEEF or slength != 4:
++                raise IOError("Invalid final read status packet")
++            resdata = self.usbread(slength, w_max_packet_size=slength)
++            final_status = unpack("<I", resdata)[0]
++            if final_status != 0:
++                raise IOError(f"Read completed with error status {final_status:#x}")
++            success = True
++        except Full:
++            self.error("Timed out waiting for file writer")
+         except Exception as e:
+             self.error(f"Exception during readflash: {str(e)}")
+         finally:
+-            if filename and 'rq' in locals():
++            if filename and worker.is_alive():
+                 try:
+-                    rq.put(None, timeout=1)
+-                except Exception:
+-                    pass
+-                if 'worker' in locals():
+-                    worker.join(timeout=10)
+-        # Cleanup on failure
++                    rq.put(None, timeout=30 if success else 1)
++                except Full:
++                    self.error("Timed out stopping file writer")
++                    success = False
++                worker.join(timeout=30)
++            if display:
++                pg.done()
+         if filename:
+-            rq.put(None)
+-            worker.join(timeout=10)
+-        if display:
+-            pg.done()
+-        return buffer if filename == "" else False
++            if worker.is_alive():
++                self.warning("Writer thread didn't finish cleanly")
++                return False
++            if writer_errors:
++                self.error(f"File writer failed: {writer_errors[0]}")
++                return False
++            return success
++        return buffer if success else b""
+ 
+     class ShutDownModes:
+         NORMAL = 0
+diff --git a/mtkclient/Library/mtk_class.py b/mtkclient/Library/mtk_class.py
+index 4a9be79..0a28276 100644
+--- a/mtkclient/Library/mtk_class.py
++++ b/mtkclient/Library/mtk_class.py
+@@ -152,11 +152,10 @@ class Mtk(metaclass=LogBase):
+             interface = self.interface
+         if vid != -1 and pid != -1:
+             if interface == -1:
+-                for dev in default_ids:
+-                    if dev[0] == vid and dev[1] == pid:
+-                        interface = dev[2]
+-                        break
+-            portconfig = [[vid, pid, interface]]
++                devices = default_ids.get(vid)
++                if isinstance(devices, dict):
++                    interface = devices.get(pid, -1)
++            portconfig = {vid: {pid: interface}}
+         else:
+             portconfig = default_ids
+         self.port = Port(mtk=self, portconfig=portconfig, serialportname=serialportname, loglevel=self.__logger.level)
+diff --git a/mtkclient/Library/thread_handling.py b/mtkclient/Library/thread_handling.py
+index 6ddf13f..1119581 100644
+--- a/mtkclient/Library/thread_handling.py
++++ b/mtkclient/Library/thread_handling.py
+@@ -1,5 +1,5 @@
+ from queue import Queue
+-def writedata(filename, rq: Queue):
++def writedata(filename, rq: Queue, errors=None):
+     """
+     Optimized writer: uses buffered I/O and larger writes
+     """
+@@ -9,12 +9,11 @@ def writedata(filename, rq: Queue):
+                 block = rq.get(timeout=300)
+                 if block is None:
+                     break
+-                try:
+-                    wf.write(block)
+-                except Exception as e:
+-                    print(f"Write error: {e}")
+-                    break
++                if wf.write(block) != len(block):
++                    raise OSError("Short file write")
+     except Exception as e:
++        if errors is not None:
++            errors.append(e)
+         print(f"Writer thread exception: {e}")
+     finally:
+         rq.task_done()  # ensure queue doesn't hang

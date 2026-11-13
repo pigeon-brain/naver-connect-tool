@@ -1,0 +1,78 @@
+{
+  "tool_version": "0.5-rc2",
+  "previous_hardware_session": {
+    "stock_backup": {
+      "verified_regions": [
+        "boot1",
+        "boot2",
+        "user"
+      ],
+      "restoration_tested": false
+    },
+    "bootloader_unlock": {
+      "seccfg_readback_verified": true,
+      "fastboot_unlocked": "yes"
+    },
+    "preloader_to_fastboot": {
+      "serial_settings": "921600 8N1",
+      "rts": true,
+      "mode_acknowledged": true,
+      "disconnect_pipe_error": true,
+      "fastboot_reconnected": true
+    },
+    "bootloader_fastboot": {
+      "usb_id": "0e8d:201c",
+      "unlocked": "yes",
+      "secure": "no",
+      "current_slot": "a"
+    },
+    "fastbootd": {
+      "usb_id": "18d1:4ee0",
+      "is_userspace": "yes",
+      "unlocked": "yes",
+      "secure": "yes",
+      "snapshot_update_status": "none"
+    },
+    "lineage_install": {
+      "setup_screen_user_confirmed": true,
+      "system_flash_success": true,
+      "userdata_formatted": true,
+      "vbmeta_avb_disabled": true,
+      "hardware_diagnostics_completed": false,
+      "adb_verified": true
+    }
+  },
+  "tool_checks": {
+    "hardware_tested": false,
+    "offline_passed": [
+      "windows_menu_launch",
+      "stock_record_verification_and_backup_copy",
+      "manifest_creation_and_verification",
+      "reject_changed_or_extra_file",
+      "reject_existing_copy_destination",
+      "simulated_preloader_ack_and_disconnect_error",
+      "simulated_fastboot_mode_query",
+      "tk_gui_initialization",
+      "simulated_wireless_adb_pairing_connection_and_discovery",
+      "simulated_adb_identity_check",
+      "reject_modified_apk_before_adb",
+      "simulated_adb_mute_readback_and_idempotence",
+      "simulated_apk_install_package_check_and_console_launch",
+      "single_sector_write_guard",
+      "os_failure_stops_userdata_format",
+      "invalid_image_hash_blocks_device_commands",
+      "full_stock_gpt_crc_and_corruption_rejection",
+      "combined_gui_initialization",
+      "missing_setup_fields_reported_together",
+      "windows_all_four_mode_driver_registration_query",
+      "adb_error_classification_and_worker_recovery",
+      "three_language_preview_and_advanced_gui",
+      "language_switch_preserves_inputs",
+      "language_switch_locked_during_work",
+      "public_packaging_local_tests_8_passed"
+    ],
+    "android_setup_hardware_tested": true,
+    "integrated_backup_unlock_os_hardware_tested": false
+  },
+  "distribution": "source_only_separate_repositories"
+}
