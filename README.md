@@ -2,62 +2,103 @@
 
 [한국어](README.ko.md) · [English](README.md) · [日本語](README.ja.md)
 
-A Windows tool for Npay Connect backup, bootloader unlock, a verified LineageOS installation flow, and Android app setup. **Experimental: the combined backup-to-install workflow has not been retested end to end on hardware. Stock restoration is not implemented or verified.**
+![Connect Toolkit — backup, unlock and LineageOS installation](docs/overview.svg)
 
-## Repository scope and release status
+A Windows tool for backing up Npay Connect, unlocking its bootloader, installing LineageOS, and connecting through ADB to install apps. Targets the MT6768/MT6769 Npay Connect.
 
-This repository contains the Windows backup/unlock/OS tool only. Android diagnostic sources are in the separate `naver-connect-diagnostics` repository; the dashboard/stream-deck console belongs to `naver-connect-console`. Neither app nor the RGB/IC helper is bundled here. The optional external-APK setup screen remains, but requires explicitly selected APKs and their SHA-256 manifest; it does not build the apps or start their hardware helper.
+## Features
 
-This is an experimental source release, not a complete installer. Formatting userdata occurs only in the selected OS installation workflow; there is no separate tested factory-reset/restore feature. The combined backup→unlock→OS workflow has not been retested end to end, restoration/relocking and interrupted-operation resume are not implemented, and clean-PC bootstrap is not hardware-validated. Individual device operations and offline checks do not establish complete recovery. Android speaker muting does not mute the independent payment-reader buzzer.
+| Feature | Operation |
+| --- | --- |
+| Stock backup | Save eMMC USER, BOOT1, BOOT2, RAM Preloader and GPT |
+| Backup verification | Check file sizes, SHA-256 and GPT CRC |
+| Bootloader unlock | Match device CID, GPT and seccfg with the backup; write and verify by readback |
+| Fastboot transition | Send the Preloader handshake and confirm actual Fastboot responses |
+| LineageOS installation | Verify the selected GSI and stock vbmeta, then install |
+| App setup | Discover and pair wireless ADB, verify APK hashes, install apps and launch the console |
+| Preparation checks | Show missing drivers, tools, files and free space with suggested fixes |
+| Interface preview | Simulate progress, missing drivers, connection loss and backup verification errors |
 
+The interface supports Korean, English and Japanese. Switching languages preserves entered values.
 
-## Try the interface without touching a device
+## Getting started
 
-1. Install Python with Tkinter.
-2. Double-click **Preview.cmd**.
-3. Choose **한국어 / English / 日本語** in the window.
-
-The preview uses simulated data. It blocks external process execution and does not access ADB, USB, firmware, or your backups. You can test normal progress, missing drivers, lost connections, and backup verification failures.
-
-## Actual operation
-
-**Connect.cmd** opens the advanced operational interface. It can modify the connected device. Read the preparation checks before starting.
+Install Python 3.10+ with Tkinter and Android Platform-Tools. Add `adb` and `fastboot` to PATH.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/setup.ps1
-# Optional: prepare the pinned mtkclient environment for backup/unlock.
+# Also prepare mtkclient for backup and unlock:
 powershell -ExecutionPolicy Bypass -File scripts/setup.ps1 -WithDeviceTools
 ```
 
-Install Android Platform-Tools and make `adb` and `fastboot` available on PATH. Prepare WinUSB drivers for `0E8D:2000`, `0E8D:0003`, `0E8D:201C`, and `18D1:4EE0`. Fastboot requires the Android device-interface GUID. The setup script does not install drivers, request administrator rights, or run device commands.
+- **Preview.cmd** opens the simulated setup interface.
+- **Connect.cmd** opens the device-operation interface.
+- **Connect.cmd --cli** opens USB, Fastboot and backup-verification menus.
 
-The launchers prefer `.venv`, then the system Python launcher. `CONNECT_MTK_REPO` can point to a prepared mtkclient checkout. An included patch documents the exact local fixes used with upstream commit `118a000a83ea31c4f427fe5225abfe964546e05e`.
+Install WinUSB drivers separately for these modes:
 
-### Workflows
+| Mode | USB ID |
+| --- | --- |
+| Preloader | `0E8D:2000` |
+| BROM | `0E8D:0003` |
+| Fastboot | `0E8D:201C` |
+| fastbootd | `18D1:4EE0` |
 
-- Backup USER, BOOT1, BOOT2, RAM Preloader and GPT; check sizes, SHA-256 and GPT CRC.
-- Verify device identity and stock seccfg against that backup before the supported unlock operation. Restrict the write to one approved 512-byte record and verify the full partition afterward.
-- Enter Fastboot through the verified Preloader handshake, then confirm actual Fastboot responses.
-- Optionally install the one explicitly hash-allowlisted LineageOS image. This formats userdata. Failures stop subsequent writes; automatic resume and relocking are not supported.
-- Discover/pair wireless ADB, verify the selected Connect, mute audio, verify/install the selected console and diagnostic APKs, and launch the console.
+Fastboot requires the Android device-interface GUID. Launchers prefer `.venv`. Set `CONNECT_MTK_REPO` to use an existing checkout. The pinned mtkclient commit is `118a000a83ea31c4f427fe5225abfe964546e05e`; local fixes are documented in `patches/`.
 
-Power/cable operations, Windows permission prompts, Android setup and debugging authorization still require the person operating the device. These are prompted at the relevant stages. A single GUI does not remove these physical requirements.
+## Backup → unlock → install
 
-Only the tested MT6768/MT6769 Npay Connect path is intended. **TS-201 is a separate Windows device and is not supported.** Never substitute another device's Preloader, vbmeta, or backup. Keep at least 35GB available for a new backup. RPMB, separate secure elements, payment keys and server-side registration are outside backup coverage. A successful file hash check is not proof that restoration will succeed.
+1. Choose the target serial and a new backup folder with at least 35GB free. NAS paths are supported.
+2. Run the preparation check and resolve the listed requirements.
+3. Start the backup-first workflow to save and verify the backup.
+4. Reconnect USB and power when the connection tool reports that it is waiting.
+5. The tool matches device identity and stock seccfg, writes the supported V4 512-byte unlock record, then verifies the full 8MiB partition.
+6. Follow the power-reconnection prompt and confirm Fastboot detection.
+7. With OS installation selected, the tool checks serial, slot, fastbootd and snapshot state, then processes `system_a`, `userdata` and `vbmeta_a` in order.
 
-## Assets not distributed
+**OS installation erases user data.** Use Preloader, vbmeta and backups from the same device. Follow the prompts for cables, power, UAC approval, Android setup and debugging authorization.
 
-No device dumps, firmware, APKs, proprietary fonts, USB driver binaries or payment material are included. Select your own authorized assets. External APK manifests are supplied by the operator and are not bundled. The accepted GSI comes from [MisterZtr/LineageOS_gsi](https://github.com/MisterZtr/LineageOS_gsi/releases/tag/v2026.01.05-lineage22.2), not an official device build.
+The supported image is `LineageOS-22.2-20260105-VANILLA-EXT4-GSI.img` (2,623,557,632 bytes) from [MisterZtr's LineageOS GSI](https://github.com/MisterZtr/LineageOS_gsi/releases/tag/v2026.01.05-lineage22.2). Its SHA-256 must match the tool's allowlist.
 
-## Verification and troubleshooting
+## ADB and app installation
 
-The **Preparation** view lists missing settings and suggested fixes. Failed checks prevent device work. Logs and workflow checkpoints remain local under `logs/`; Android setup logs are under the user's `ConnectSetup/logs` directory. Do not upload them without reviewing and removing device identifiers and private paths.
+Use ADB discovery to find connection and pairing addresses, enter the six-digit wireless-debugging code, and pair. Select the intended device when several are connected.
+
+Select the console and diagnostics APKs with their SHA-256 manifest. The mute-and-install action verifies the device and Android boot state, configures Android media muting, Do Not Disturb and sound effects, verifies and installs the APKs, then launches the console. The card reader has a separate hardware buzzer. Adjust device volume and Do Not Disturb to restore Android sound.
+
+Diagnostic app sources are in [naver-connect-diagnostics](https://github.com/pigeon-brain/naver-connect-diagnostics). Prepare the console APK separately.
+
+## Verification status
+
+| Area | Status |
+| --- | --- |
+| Individual backup, unlock and LineageOS installation procedures | Successful hardware-session records |
+| Android mute and app-install workflow | Hardware verified |
+| Integrated tool | Offline checks of write boundaries, hashes, failure stops, interface and translations completed |
+| Further validation | Full integrated backup-to-install hardware run, clean-PC setup and actual stock restoration |
+| Unimplemented features | Automatic restoration, relocking, interrupted-operation resume and standalone factory reset |
+| Backup exclusions | RPMB, separate secure elements, payment keys and server-side registration/authentication |
+
+File verification and a restoration test are separate checks. Repeating OS installation on a working device erases its data. See `verification.json` for detailed evidence.
+
+## Logs and troubleshooting
+
+A failed check stops the workflow and displays suggested fixes in the preparation view. Review the log and device state before choosing the next step.
+
+- Workflow logs: `logs/`
+- Preparation results: `logs/preflight-latest.json`
+- Step status: `logs/workflow-state.json`
+- Android setup logs: `ConnectSetup/logs` under the user's home directory
+
+Remove device identifiers and private paths before sharing logs. Keep backups, keys and pairing codes private.
 
 ```powershell
 python -m unittest discover -p "test_*.py"
 python scripts/check_public_tree.py
 ```
 
-`verification.json` distinguishes hardware observations from offline tests. The Android mute/app-install flow was tested on the device; the integrated backup/unlock/OS rewrite was not rerun for packaging. GUI translation covers the application interface; upstream tool output can remain in its original language.
+## Distribution
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). The toolkit is distributed under [GPL-3.0](LICENSE). See [THIRD_PARTY.md](THIRD_PARTY.md) for upstream attribution. This is an independent project, not affiliated with or endorsed by Naver, Npay, or LineageOS.
+Source and launch scripts use [GPL-3.0](LICENSE). Supply authorized APKs, firmware, fonts, USB drivers and verification manifests separately.
+
+An independently developed project. See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md) and [THIRD_PARTY.md](THIRD_PARTY.md).
