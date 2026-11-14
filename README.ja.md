@@ -2,50 +2,103 @@
 
 [한국어](README.ko.md) · [English](README.md) · [日本語](README.ja.md)
 
-Npay Connectのバックアップ、ブートローダーのロック解除、検証済みのLineageOS導入手順、Androidアプリ設定をまとめたWindows向けツールです。
+![Connect Toolkit — backup, unlock and LineageOS installation](docs/overview.svg)
 
-**実験段階です。統合したバックアップからOS導入までの手順は、実機で一通り再検証していません。純正状態への自動復元は未実装・未検証です。**
+Npay Connectの純正バックアップ、ブートローダーのロック解除、LineageOS導入、ADB接続とAPKインストールを行うWindowsツールです。対象はMT6768/MT6769系のNpay Connectです。
 
-## リポジトリの範囲と公開状態
+## 主な機能
 
-このリポジトリにはWindowsのバックアップ・ロック解除・OS変更ツールのみを含みます。Android診断アプリは `naver-connect-diagnostics`、ダッシュボード・デッキアプリは `naver-connect-console` に分離しています。IC・RGBアプリのソースとハードウェア補助サービスは含みません。外部APK導入画面は残しますが、APKとSHA-256マニフェストを明示的に選択する必要があり、アプリのビルドや補助サービスの起動は行いません。
+| 機能 | 動作 |
+| --- | --- |
+| 純正バックアップ | eMMC USER・BOOT1・BOOT2、RAM Preloader、GPTを保存 |
+| バックアップ検証 | ファイルサイズ、SHA-256、GPT CRCを確認 |
+| ロック解除 | 実機のCID・GPT・seccfgをバックアップと照合し、書き込み後に再読出しで検証 |
+| Fastbootへの切り替え | Preloaderとの通信後、実際のFastboot応答を確認 |
+| LineageOS導入 | 指定GSIと純正vbmetaを検証してインストール |
+| アプリ設定 | 無線ADB検索・ペアリング、APK検証・導入、コンソール起動 |
+| 準備確認 | ドライバー、ツール、ファイル、空き容量の不足と対処方法を表示 |
+| 画面プレビュー | 正常進行、ドライバー不足、切断、バックアップ検証エラーを再現 |
 
-実験版ソースであり、完成したインストーラーではありません。データ初期化はOS導入時のuserdataフォーマットです。単独の工場初期化・純正復元機能は検証していません。統合手順の実機通し試験、実際の復元、新規PCでの初期準備の実機確認は未完了です。自動復元・再ロック・中断した処理の自動再開も未対応です。Androidのミュートはカードリーダーの独立したブザーを止めません。
+韓国語・英語・日本語を切り替えられます。入力値は切り替え後も保持します。
 
+## 準備
 
-## 画面を試す
-
-Tkinter付きのPythonを用意し、`Preview.cmd`を開いてください。画面上部で日本語・英語・韓国語を切り替えられます。プレビューはサンプルデータのみを使い、外部プログラムの実行を遮断します。USB、ADB、端末、バックアップにはアクセスしません。
-
-正常な進行のほか、ドライバー不足、接続切れ、バックアップ検証失敗を試せます。
-
-## 実際に使用する
-
-`Connect.cmd`は実機操作を行う詳細画面です。準備確認に表示される不足項目を解決してから実行してください。
+Python 3.10以上（Tkinter付き）とAndroid Platform-Toolsを用意し、`adb`と`fastboot`をPATHに追加します。
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/setup.ps1
-# バックアップ・ロック解除用の環境が必要な場合
+# バックアップ・ロック解除用のmtkclientも準備する場合:
 powershell -ExecutionPolicy Bypass -File scripts/setup.ps1 -WithDeviceTools
 ```
 
-Android Platform-Toolsを別途用意し、`adb`と`fastboot`をPATHに追加します。WinUSBは `0E8D:2000`、`0E8D:0003`、`0E8D:201C`、`18D1:4EE0` の各モードで必要です。Fastboot用にはAndroidのデバイスインターフェースGUIDも必要です。セットアップスクリプトはドライバーの導入や端末操作を行いません。
+- **Preview.cmd**：サンプルデータで画面とエラー処理を試します。
+- **Connect.cmd**：実機操作画面を開きます。
+- **Connect.cmd --cli**：USB、Fastboot、バックアップ検証メニューを開きます。
 
-- 新規バックアップには35GB以上の空き容量を確保してください。
-- USER・BOOT1・BOOT2・RAM Preloader・GPTを保存し、サイズ・SHA-256・GPT CRCを確認します。
-- ロック解除前に実機の識別情報、GPT、seccfgをバックアップと照合します。
-- OS導入を選択するとユーザーデータが削除されます。指定のハッシュを持つ検証済みGSI以外は拒否します。
-- 失敗時は後続処理を停止します。途中からの自動再開や再ロックは行いません。
-- Android設定では無線ADBの接続、ミュート、選択した2つのAPKの検証・インストール、コンソール起動を行います。
+次の各モード用にWinUSBを別途インストールします。
 
-電源やケーブルの操作、OSの初期設定、USBデバッグの許可などは利用者の操作が必要です。対象は検証したMT6768/MT6769系Npay Connectです。**別製品のWindows端末TS-201には対応していません。**
+| モード | USB ID |
+| --- | --- |
+| Preloader | `0E8D:2000` |
+| BROM | `0E8D:0003` |
+| Fastboot | `0E8D:201C` |
+| fastbootd | `18D1:4EE0` |
 
-RPMB、別体のセキュアエレメント、決済キー、サーバー側の登録状態はバックアップ対象外です。ファイル検証の成功だけで復元の成功は保証されません。
+FastbootにはAndroidのデバイスインターフェースGUIDが必要です。起動時は`.venv`を優先します。既存のmtkclientは`CONNECT_MTK_REPO`で指定できます。基準コミットは`118a000a83ea31c4f427fe5225abfe964546e05e`で、変更内容は`patches/`にあります。
 
-## 公開ファイルと検証範囲
+## バックアップ → ロック解除 → OS導入
 
-端末ダンプ、ファームウェア、APK、純正フォント、USBドライバーのバイナリーは同梱しません。必要なファイルは利用権限のあるものを自分で選択してください。ログ・バックアップ・ペアリングコード・端末識別情報をGitHubへ投稿しないでください。
+1. 35GB以上の空き容量がある新規保存先と対象シリアルを指定します。NASも利用できます。
+2. 準備確認を実行し、表示された必要項目をそろえます。
+3. バックアップから順に実行し、保存と検証を進めます。
+4. 接続ツールの待機表示に合わせてUSBと電源をつなぎ直します。
+5. 識別情報と純正seccfgを照合し、V4の512バイトの解除レコードを書き込んで8MiBの全領域を再検証します。
+6. 案内に従って電源を再接続し、Fastbootの応答を確認します。
+7. OS導入を選択した場合、シリアル・スロット・fastbootd・スナップショット状態を確認し、`system_a`、`userdata`、`vbmeta_a`の順に処理します。
 
-実機で確認済みの項目とモックテストを `verification.json` に分けて記録しています。音声のミュートとアプリ導入は実機で確認済みです。詳細は[英語版](README.md)と[ライセンス](LICENSE)を参照してください。外部ツールの生ログは元の言語で表示される場合があります。
+**OS導入ではユーザーデータを消去します。** 同じ実機のPreloader・vbmeta・バックアップを使ってください。ケーブルと電源の操作、UAC承認、Android初期設定、デバッグ許可は案内に従って操作します。
 
-このプロジェクトはNaver、Npay、LineageOSの公式プロジェクトではありません。
+対応イメージは[MisterZtrのLineageOS GSI](https://github.com/MisterZtr/LineageOS_gsi/releases/tag/v2026.01.05-lineage22.2)の`LineageOS-22.2-20260105-VANILLA-EXT4-GSI.img`（2,623,557,632バイト）です。登録済みSHA-256と一致するファイルを使用します。
+
+## ADB接続とアプリ導入
+
+ADB検索で接続先・ペアリング先・シリアルを確認し、無線デバッグの6桁コードを入力して接続します。複数端末がある場合は対象を選択します。
+
+コンソール・診断APKとSHA-256マニフェストを指定すると、機種・起動状態の確認、Androidのミュート・通知制限・効果音設定、APK検証・導入、コンソール起動を順に行います。カードリーダーのブザーは独立したハードウェアです。Androidの音を戻す際は端末音量と通知制限を調整してください。
+
+診断アプリは[naver-connect-diagnostics](https://github.com/pigeon-brain/naver-connect-diagnostics)にあります。コンソールAPKは別途用意します。
+
+## 検証状況
+
+| 項目 | 状態 |
+| --- | --- |
+| 個別のバックアップ・ロック解除・LineageOS導入手順 | 実機での成功記録あり |
+| Androidミュート・アプリ導入 | 実機確認済み |
+| 統合ツール | 書き込み範囲、ハッシュ、失敗時停止、画面、翻訳のオフライン確認済み |
+| 追加検証 | 統合手順の実機通し試験、新規PC準備、実際の純正復元 |
+| 未実装機能 | 自動復元、再ロック、中断処理の自動再開、単独の工場初期化 |
+| バックアップ対象外 | RPMB、別体セキュアエレメント、決済キー、サーバー側登録・認証状態 |
+
+ファイル検証と復元試験は別の確認です。動作中の端末でOS導入を繰り返すとデータが消去されます。詳細は`verification.json`を参照してください。
+
+## ログと問題解決
+
+検査失敗時は処理を停止し、準備画面に対処方法を表示します。ログと実機の状態を確認して次の操作を選んでください。
+
+- 処理ログ：`logs/`
+- 準備確認：`logs/preflight-latest.json`
+- ステップの状態：`logs/workflow-state.json`
+- Android設定ログ：ユーザーホームの`ConnectSetup/logs`
+
+ログ共有前に端末識別子と個人パスを削除してください。バックアップ、鍵、ペアリングコードは個人で保管します。
+
+```powershell
+python -m unittest discover -p "test_*.py"
+python scripts/check_public_tree.py
+```
+
+## 配布
+
+ソースと起動スクリプトを[GPL-3.0](LICENSE)で配布します。APK、ファームウェア、フォント、USBドライバー、検証マニフェストは利用権限のあるものを別途用意してください。
+
+個人開発のプロジェクトです。[CONTRIBUTING.md](CONTRIBUTING.md)、[SECURITY.md](SECURITY.md)、[THIRD_PARTY.md](THIRD_PARTY.md)も参照してください。
