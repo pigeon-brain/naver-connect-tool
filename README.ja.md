@@ -2,7 +2,7 @@
 
 [한국어](README.ko.md) · [English](README.md) · [日本語](README.ja.md)
 
-![Connect Toolkit — backup, unlock and LineageOS installation](docs/overview.svg)
+![Installer preview running on Windows](docs/screenshot.png)
 
 Npay Connectの純正バックアップ、ブートローダーのロック解除、LineageOS導入、ADB接続とAPKインストールを行うWindowsツールです。対象はMT6768/MT6769系のNpay Connectです。
 

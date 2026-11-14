@@ -2,7 +2,7 @@
 
 [한국어](README.ko.md) · [English](README.md) · [日本語](README.ja.md)
 
-![Connect Toolkit — backup, unlock and LineageOS installation](docs/overview.svg)
+![Installer preview running on Windows](docs/screenshot.png)
 
 네이버페이 커넥트의 순정 백업, 부트로더 잠금 해제, LineageOS 설치, ADB 연결과 APK 설치를 진행하는 Windows 도구입니다. 대상 기기는 MT6768/MT6769 계열 Npay Connect입니다.
 

@@ -2,7 +2,7 @@
 
 [한국어](README.ko.md) · [English](README.md) · [日本語](README.ja.md)
 
-![Connect Toolkit — backup, unlock and LineageOS installation](docs/overview.svg)
+![Installer preview running on Windows](docs/screenshot.png)
 
 A Windows tool for backing up Npay Connect, unlocking its bootloader, installing LineageOS, and connecting through ADB to install apps. Targets the MT6768/MT6769 Npay Connect.
 

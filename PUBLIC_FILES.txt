@@ -36,4 +36,4 @@ test_i18n.py
 test_workflows.py
 verification.json
 workbench.py
-docs/overview.svg
+docs/screenshot.png

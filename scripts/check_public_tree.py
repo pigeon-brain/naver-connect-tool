@@ -1,6 +1,6 @@
 """Audit reviewed source files, the Git index, and release archives; no device access."""
 from pathlib import Path, PurePosixPath
-import argparse, re, subprocess, zipfile
+import argparse, re, subprocess, zipfile, hashlib
 ROOT=Path(__file__).resolve().parents[1]
 SKIP={'.git','__pycache__','.venv','vendor','build'}
 FORBIDDEN={'.bin','.img','.apk','.log','.pem','.key','.p12','.pfx','.jks','.7z','.zip','.partial','.otf','.ttf','.woff','.woff2','.dex','.jar','.class','.pyc'}
@@ -16,6 +16,8 @@ def inspect(name,data):
  p=PurePosixPath(name)
  if p.suffix.lower() in FORBIDDEN or any(x in {'logs','backups','build'} for x in p.parts):return 'Excluded asset: '+name
  if len(data)>2*1024*1024:return 'Unexpected large file: '+name
+ # This exact screenshot was visually reviewed for private information.
+ if name == 'docs/screenshot.png' and hashlib.sha256(data).hexdigest() == '2465fd6cc4e7e2cedd47a0c9cd70e9d0835927fe6a8ae40bd632ad9b1a1fecbb':return None
  try:text=data.decode('utf-8-sig')
  except UnicodeError:return 'Unexpected binary: '+name
  if '\x00' in text:return 'Unexpected binary: '+name
