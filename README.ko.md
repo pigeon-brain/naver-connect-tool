@@ -1,72 +1,104 @@
+# 네이버 커넥트 도구
+
 [한국어](README.ko.md) · [English](README.md) · [日本語](README.ja.md)
 
-# 네이버 커넥트 도구 0.5 준비본
+![Connect Toolkit — backup, unlock and LineageOS installation](docs/overview.svg)
 
-`Connect.cmd`를 더블클릭합니다. Python 가상환경, Platform-Tools, mtkclient가 필요합니다. 독립 실행 EXE 또는 새 PC용 자동 설치 패키지는 아직 아닙니다.
+네이버페이 커넥트의 순정 백업, 부트로더 잠금 해제, LineageOS 설치, ADB 연결과 APK 설치를 진행하는 Windows 도구입니다. 대상 기기는 MT6768/MT6769 계열 Npay Connect입니다.
 
-## 저장소 범위와 공개 상태
+## 주요 기능
 
-이 저장소에는 Windows 백업·언락·OS 변경 도구만 포함합니다. Android 진단 앱은 `naver-connect-diagnostics`, 대시보드·덱 콘솔은 `naver-connect-console` 별도 저장소입니다. IC·RGB 앱 소스와 하드웨어 보조 서비스는 여기에 포함하지 않습니다. 외부 APK 설치 보조 화면은 유지하지만 APK와 SHA-256 매니페스트를 직접 선택해야 하며, 앱 빌드나 하드웨어 보조 서비스 시작은 수행하지 않습니다.
+| 기능 | 동작 |
+| --- | --- |
+| 순정 백업 | eMMC USER·BOOT1·BOOT2, RAM Preloader, GPT 저장 |
+| 백업 검증 | 파일 크기, SHA-256, GPT CRC 검사 |
+| 부트로더 잠금 해제 | 기기와 백업의 CID·GPT·seccfg 대조 후 쓰기 및 재읽기 검증 |
+| Fastboot 전환 | Preloader 통신 후 실제 Fastboot 응답 확인 |
+| LineageOS 설치 | 지정 GSI와 순정 vbmeta 검증 후 설치 |
+| 앱 설치 | 무선 ADB 검색·페어링, APK 해시 검사·설치, 콘솔 실행 |
+| 준비 상태 검사 | 드라이버, 도구, 파일, 저장 공간의 부족 항목과 해결 방법 표시 |
+| 화면 미리보기 | 정상 진행, 드라이버 누락, 연결 끊김, 백업 검사 실패 시뮬레이션 |
 
-실험판 소스이며 완성형 설치 프로그램이 아닙니다. 사용자 데이터 초기화는 OS 설치를 선택했을 때의 userdata 포맷입니다. 독립적인 공장 초기화·순정 복원 기능은 검증되지 않았습니다. 통합 백업→언락→OS 변경의 전체 실기 재시험, 실제 순정 복원, 새 PC 초기 준비의 실기 검증은 미완료입니다. 자동 복원·재잠금·중단 작업 이어하기도 지원하지 않습니다. Android 음소거는 카드 리더의 별도 부저를 끄지 않습니다.
+화면 언어는 한국어·영어·일본어를 지원합니다. 언어를 바꿔도 입력값은 유지됩니다.
 
+## 시작하기
 
-## 백업 · 언락 · OS
+Python 3.10 이상(Tkinter 포함)과 Android Platform-Tools를 설치하고 `adb`, `fastboot`를 PATH에 추가합니다.
 
-새 백업 폴더와 대상 기기 시리얼을 입력하고 **백업부터 순서대로 실행**을 누릅니다. `OS 설치 포함`을 선택하면 검증된 이미지와 같은 기기의 순정 vbmeta_a도 지정해야 합니다. 이 옵션은 사용자 데이터를 삭제합니다.
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/setup.ps1
+# 백업·언락용 mtkclient 환경도 준비하려면:
+powershell -ExecutionPolicy Bypass -File scripts/setup.ps1 -WithDeviceTools
+```
 
-1. 같은 장치의 RAM Preloader와 GPT를 읽고, eMMC USER·BOOT1·BOOT2를 새 폴더에 보존합니다. GPT CRC와 파일 크기·SHA-256을 검사합니다.
-2. 백업 검증 후 새로운 통신 세션을 준비합니다. **연결 도구 대기 중** 안내가 나왔을 때만 USB와 전원을 다시 연결합니다.
-3. 현재 CID·GPT·원본 seccfg가 백업과 일치해야 언락을 실행합니다. 지원되는 V4 처리로 생성한 첫 512바이트만 한 번 쓰고 전체 8MiB를 다시 검증합니다.
-4. 직접 Preloader Fastboot 경로를 대기시킵니다. 이때 전원 재연결이 필요합니다. DA 종료 명령의 ACK를 Fastboot 성공으로 처리하지 않습니다.
-5. 선택했다면 지정한 시리얼·슬롯·fastbootd·스냅샷 상태를 검사하고 system_a, userdata, vbmeta_a 순서로 OS를 설치합니다. 실패하면 후속 작업을 중단합니다.
+- **Preview.cmd**: 샘플 데이터로 설치 화면과 오류 처리를 체험합니다.
+- **Connect.cmd**: 실기기 작업 화면을 엽니다.
+- **Connect.cmd --cli**: USB 조회, Fastboot, 백업 검증 메뉴를 엽니다.
 
-물리적 연결, UAC 승인, Android 초기 설정과 디버깅 허용은 사람이 해야 합니다. 프로그램 하나에서 순서를 이어가지만 이 동작들을 자동으로 대신하지는 않습니다. 자동 복원 및 재잠금은 구현하지 않았습니다.
+실기기 작업에는 아래 모드별 WinUSB 드라이버를 별도로 설치합니다.
 
-**통합된 백업·언락·OS 흐름은 아직 처음부터 끝까지 실기기 재시험하지 않았습니다.** 개별 원본 절차는 현재 커넥트에서 성공했고, 통합본은 쓰기 범위·해시·실패 중단 검사로 확인했습니다. 정상 설치된 기기에 검증 목적으로 다시 실행하지 마세요.
+| 모드 | USB ID |
+| --- | --- |
+| Preloader | `0E8D:2000` |
+| BROM | `0E8D:0003` |
+| Fastboot | `0E8D:201C` |
+| fastbootd | `18D1:4EE0` |
 
-### 필요한 환경
+Fastboot 계열에는 Android 장치 인터페이스 GUID가 필요합니다. 실행기는 `.venv`를 우선 사용하며, 외부 mtkclient 경로는 `CONNECT_MTK_REPO`로 지정합니다. 기준 커밋은 `118a000a83ea31c4f427fe5225abfe964546e05e`이고 관련 패치는 `patches/`에 있습니다.
 
-- Windows, Python 3.10 이상(Tkinter 포함), Android Platform-Tools
-- `scripts/setup.ps1`이 만드는 `.venv` 및 선택 설치한 `vendor/mtkclient`를 사용합니다. 외부 mtkclient 경로는 `CONNECT_MTK_REPO` 환경 변수로 지정합니다.
-- mtkclient 검증 기준 커밋: `118a000a83ea31c4f427fe5225abfe964546e05e`. DA·RAM payload·확장 파일 해시가 다르면 중단합니다.
-- 모드별 WinUSB 설치: Preloader `0E8D:2000`, BROM `0E8D:0003`, Fastboot `0E8D:201C`, fastbootd `18D1:4EE0`. Fastboot 계열은 Android 장치 인터페이스 GUID가 필요합니다. 드라이버 자동 설치는 이 버전에 포함하지 않았습니다.
-- 지원 GSI: `LineageOS-22.2-20260105-VANILLA-EXT4-GSI.img`, 2,623,557,632바이트. 검증된 SHA-256 외 이미지는 거절합니다.
+## 백업 → 잠금 해제 → OS 설치
 
-백업은 저장 공간 약 32GB 이상이 필요하며 검사·여유 공간을 감안해 35GB 이상을 확보하세요. NAS 경로도 지정할 수 있습니다. RPMB, 별도 보안칩, 서버 등록 및 결제 인증은 백업 범위 밖입니다. 실제 순정 복원은 시험하지 않았습니다.
+1. 35GB 이상의 여유 공간이 있는 새 백업 폴더와 대상 시리얼을 지정합니다. NAS 경로도 사용할 수 있습니다.
+2. **설정 검사**에서 준비 상태와 필요한 조치를 확인합니다.
+3. **백업부터 순서대로 실행**을 누르면 백업 저장과 검증을 진행합니다.
+4. **연결 도구 대기 중** 안내에 맞춰 USB와 전원을 다시 연결합니다.
+5. 기기 식별 정보와 원본 seccfg를 대조한 뒤 V4 잠금 해제 레코드 512바이트를 기록하고 전체 8MiB를 다시 읽어 검증합니다.
+6. 안내에 따라 전원을 다시 연결하고 Fastboot 응답을 확인합니다.
+7. **OS 설치 포함**을 선택한 경우 시리얼·슬롯·fastbootd·스냅샷 상태를 확인하고 `system_a`, `userdata`, `vbmeta_a` 순서로 처리합니다.
 
-## 연결 · 앱 설치
+**OS 설치는 사용자 데이터를 삭제합니다.** 해당 기기에서 추출한 Preloader·vbmeta·백업을 사용하세요. 전원·케이블 조작, UAC 승인, Android 초기 설정과 디버깅 허용은 화면 안내에 따라 직접 진행합니다.
 
-**ADB 기기 검색**으로 연결 주소·페어링 주소·기기 시리얼을 찾습니다. 무선 디버깅의 6자리 코드를 입력하고 **무선 페어링 및 연결**을 누릅니다. 기기가 여러 대면 대상을 직접 선택합니다.
+지원 이미지는 [MisterZtr의 LineageOS GSI](https://github.com/MisterZtr/LineageOS_gsi/releases/tag/v2026.01.05-lineage22.2)의 `LineageOS-22.2-20260105-VANILLA-EXT4-GSI.img`(2,623,557,632바이트)입니다. 등록된 SHA-256과 일치하는 이미지를 사용합니다.
 
-별도 저장소에서 빌드하거나 적법하게 확보한 콘솔·진단 APK와 검증 매니페스트를 직접 선택하세요. **음소거 및 앱 설치**는 다음을 한 번에 실행합니다.
+## ADB 연결과 앱 설치
 
-- 네이버 커넥트 모델·시리얼·Android 부팅 확인
-- 미디어 음소거, 방해금지, 터치·잠금 효과음 끄기 및 확인
-- 두 APK의 SHA-256 검증, 설치, 설치된 패키지 확인
-- 콘솔 실행
+**ADB 기기 검색**으로 연결 주소·페어링 주소·시리얼을 찾고, 무선 디버깅의 6자리 코드를 입력해 **무선 페어링 및 연결**을 누릅니다. 여러 기기가 연결된 경우 대상을 선택합니다.
 
-음소거 상태에서 다시 실행해도 음소거를 해제하지 않습니다. 소리를 다시 사용할 때는 기기의 음량과 방해금지를 해제하세요. 마이크·카메라 권한은 실제 기능 사용 시 허용합니다.
+콘솔·진단 APK와 SHA-256 매니페스트를 지정한 뒤 **음소거 및 앱 설치**를 실행합니다. 모델·부팅 상태 확인, Android 미디어 음소거·방해금지·효과음 설정, APK 검증·설치, 콘솔 실행을 순서대로 진행합니다. 카드 리더 부저는 별도 하드웨어입니다. 소리를 다시 사용하려면 기기 음량과 방해금지 설정을 조절하세요.
 
-## 기록과 공개 준비
+진단 앱 소스는 [naver-connect-diagnostics](https://github.com/pigeon-brain/naver-connect-diagnostics)에 있습니다. 콘솔 APK는 별도로 준비합니다.
 
-워크플로 로그는 `logs/`, Android 설정 로그는 사용자 홈의 `ConnectSetup/logs`에 저장됩니다. 로그·백업·원본 펌웨어·키·기기 식별 정보는 GitHub에 올리지 마세요. 공개용 소스 묶음에는 이 자료를 포함하지 않았습니다. APK·순정 폰트·펌웨어·외부 도구는 배포 권한을 별도로 확인해야 합니다. GitHub 게시 작업은 수행하지 않았습니다.
+## 검증 상태
 
-`Connect.cmd --cli`는 기존 USB 조회·Fastboot·백업 파일 검증 메뉴를 엽니다. 통합 시험: `python test_workflows.py`. 검증 범위는 `verification.json`에 기록합니다.
+| 항목 | 확인 범위 |
+| --- | --- |
+| 개별 백업·언락·LineageOS 설치 절차 | 실기 성공 기록 |
+| Android 음소거·앱 설치 흐름 | 실기 확인 |
+| 통합 도구 | 쓰기 범위·해시·실패 시 중단·화면·번역의 오프라인 검사 완료 |
+| 추가 검증 | 통합 백업→설치 전체 실기 재시험, 새 PC 준비 과정, 실제 순정 복원 |
+| 미구현 기능 | 자동 복원, 재잠금, 중단 작업 자동 재개, 별도 공장 초기화 |
+| 백업 제외 영역 | RPMB, 별도 보안칩, 결제 키, 서버 측 등록·인증 상태 |
 
-## 설정 검사와 오류 처리
+파일 검증과 실제 복원 시험은 별도 단계입니다. 검증 목적으로 정상 설치된 기기에 OS 설치를 반복하면 데이터가 삭제됩니다. 상세 기록은 `verification.json`을 참조하세요.
 
-**설정 검사**를 누르면 **준비 상태** 탭에서 필요한 항목을 모두 확인할 수 있습니다. 항목을 선택하면 조치 내용을 펼쳐 보여줍니다. 실제 실행 직전에도 검사하며, 실패 항목이 있으면 기기 명령은 시작하지 않습니다.
+## 로그와 문제 해결
 
-- Platform-Tools·PyUSB·mtkclient·DA/payload 해시·USB 모드별 WinUSB
-- 백업 폴더 존재 여부·쓰기 권한·35GB 여유 공간·백업 완료 기록·파일 크기
-- 대상 시리얼, GSI·순정 vbmeta, OS 설치 시 현재 Fastboot 연결
-- ADB 인증 거절·오프라인·무선 주소 오류·APK 저장 공간/버전/서명 오류별 안내
+검사 실패 시 해당 단계에서 멈추며 **준비 상태**에 해결 방법을 표시합니다. 로그와 기기 상태를 확인한 뒤 필요한 단계를 선택하세요.
 
-검사 결과는 `logs/preflight-latest.json`, 단계별 완료·실패 상태는 `logs/workflow-state.json`에 남습니다. 실패 후 중간 상태를 자동으로 덮어쓰거나 다음 단계를 계속하지 않습니다. 로그와 실제 상태를 확인한 뒤 필요한 단계만 선택하세요. 부분 백업의 자동 이어읽기, 실패한 OS 설치의 자동 재개는 지원하지 않습니다.
+- 작업 로그: `logs/`
+- 준비 검사: `logs/preflight-latest.json`
+- 단계별 상태: `logs/workflow-state.json`
+- Android 설정 로그: 사용자 홈의 `ConnectSetup/logs`
 
-## 언어와 공개 패키지
+로그를 공유할 때는 기기 식별자와 개인 경로를 제거하세요. 백업·키·페어링 코드는 개인 저장소에 보관합니다.
 
-Preview.cmd의 설치 마법사와 Connect.cmd의 상세 설정 화면에서 한국어·English·日本語를 선택할 수 있습니다. 언어를 바꿔도 입력은 유지됩니다. 외부 도구 원시 로그는 원문으로 남을 수 있습니다.
+```powershell
+python -m unittest discover -p "test_*.py"
+python scripts/check_public_tree.py
+```
 
-새 PC에서는 scripts/setup.ps1로 .venv를 준비합니다. 백업·언락 환경은 -WithDeviceTools를 추가합니다. 드라이버와 Platform-Tools는 별도 설치해야 합니다. 공개 패키지에 APK·펌웨어·순정 폰트·기기 백업은 포함하지 않습니다. 소스는 GPL-3.0으로 준비했으며 GitHub에는 아직 게시하지 않았습니다.
+## 배포
+
+소스와 실행 스크립트를 [GPL-3.0](LICENSE)으로 배포합니다. APK, 펌웨어, 글꼴, USB 드라이버와 검증 매니페스트는 사용 권한이 있는 파일을 별도로 준비하세요.
+
+개인 개발 프로젝트입니다. 기여 방법은 [CONTRIBUTING.md](CONTRIBUTING.md), 보안 안내는 [SECURITY.md](SECURITY.md), 외부 코드 출처는 [THIRD_PARTY.md](THIRD_PARTY.md)에 있습니다.
